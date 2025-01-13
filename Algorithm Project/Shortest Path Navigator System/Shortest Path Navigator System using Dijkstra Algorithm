@@ -1,0 +1,342 @@
+package shortestpathnavigatorsystem;
+import java.io.*;
+import java.nio.file.Files;
+import java.util.*;
+
+public class ShortestPathNavigatorSystem {
+
+    static class Graph {
+        int vertices;
+        Map<String, List<int[]>> adjList; // int[]: {neighborIndex, weight}
+        Map<String, Integer> vertexMap; // Map vertex names to indices
+        Map<Integer, String> indexMap; // Map indices to vertex names
+
+        Graph(List<String> vertexNames) {
+            this.vertices = vertexNames.size();
+            adjList = new HashMap<>();
+            vertexMap = new HashMap<>();
+            indexMap = new HashMap<>();
+
+            for (int i = 0; i < vertexNames.size(); i++) {
+                String vertex = vertexNames.get(i);
+                adjList.put(vertex, new ArrayList<>());
+                vertexMap.put(vertex, i);
+                indexMap.put(i, vertex);
+            }
+        }
+
+        void addEdge(String src, String dest, int weight) {
+            adjList.get(src).add(new int[]{vertexMap.get(dest), weight});
+        }
+
+        void displayAllVertices() {
+            System.out.println("\n===== All Vertices =====");
+            for (String vertex : adjList.keySet()) {
+                System.out.println(vertex);
+            }
+        }
+
+        void findAllPaths(String start, String end, List<String> path, List<List<String>> allPaths, boolean[] visited) {
+            int startIdx = vertexMap.get(start);
+            int endIdx = vertexMap.get(end);
+            visited[startIdx] = true;
+            path.add(start);
+
+            if (startIdx == endIdx) {
+                allPaths.add(new ArrayList<>(path));
+            } else {
+                for (int[] neighbor : adjList.get(start)) {
+                    if (!visited[neighbor[0]]) {
+                        findAllPaths(indexMap.get(neighbor[0]), end, path, allPaths, visited);
+                    }
+                }
+            }
+
+            path.remove(path.size() - 1);
+            visited[startIdx] = false;
+        }
+
+        int findShortestPath(String start, String end, List<String> shortestPath, List<Integer> weights) {
+            PriorityQueue<int[]> pq = new PriorityQueue<>(Comparator.comparingInt(a -> a[1]));
+            int[] distances = new int[vertices];
+            int[] predecessors = new int[vertices];
+            Arrays.fill(distances, Integer.MAX_VALUE);
+            Arrays.fill(predecessors, -1);
+
+            distances[vertexMap.get(start)] = 0;
+            pq.add(new int[]{vertexMap.get(start), 0});
+
+            while (!pq.isEmpty()) {
+                int[] current = pq.poll();
+                int vertex = current[0];
+                int dist = current[1];
+
+                if (vertex == vertexMap.get(end)) {
+                    reconstructPath(predecessors, vertexMap.get(start), vertexMap.get(end), shortestPath);
+                    addConnectionWeights(shortestPath, weights, this);
+                    return dist;
+                }
+
+                for (int[] neighbor : adjList.get(indexMap.get(vertex))) {
+                    int nextVertex = neighbor[0];
+                    int weight = neighbor[1];
+                    if (dist + weight < distances[nextVertex]) {
+                        distances[nextVertex] = dist + weight;
+                        predecessors[nextVertex] = vertex;
+                        pq.add(new int[]{nextVertex, distances[nextVertex]});
+                    }
+                }
+            }
+            return -1; // If no path exists
+        }
+
+        void reconstructPath(int[] predecessors, int start, int end, List<String> path) {
+            LinkedList<String> reconstructedPath = new LinkedList<>();
+            for (int at = end; at != -1; at = predecessors[at]) {
+                reconstructedPath.addFirst(indexMap.get(at));
+            }
+            path.addAll(reconstructedPath);
+        }
+
+        static void addConnectionWeights(List<String> path, List<Integer> weights, Graph graph) {
+            for (int i = 0; i < path.size() - 1; i++) {
+                String src = path.get(i);
+                String dest = path.get(i + 1);
+                for (int[] neighbor : graph.adjList.get(src)) {
+                    if (graph.indexMap.get(neighbor[0]).equals(dest)) {
+                        weights.add(neighbor[1]);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        void displayAllConnections() {
+        System.out.println("\n===== All Connections =====");
+        for (String src : adjList.keySet()) {
+            for (int[] neighbor : adjList.get(src)) {
+                String dest = indexMap.get(neighbor[0]);
+                int weight = neighbor[1];
+                System.out.println(src + " -> " + dest + " (Weight: " + weight + ")");
+            }
+        }
+}
+    }
+
+    public static void main(String[] args) {
+        System.out.println("===============Shortest Path Navigator System===============");
+        try {
+            // Read vertices and edges from a file
+            File file = new File("C:\\Users\\SABUJ\\Desktop\\path.txt");
+            Graph graph = initializeGraphFromFile(file);
+
+            Scanner scanner = new Scanner(System.in);
+            while (true) {
+                System.out.println("\n========= Menu =========");
+                System.out.println("1. View All Vertices");
+                System.out.println("2. Find Path (All Possible Paths and Shortest Path)");
+                System.out.println("3. Add Vertex");
+                System.out.println("4. Remove Path");
+                System.out.println("5. View All Path");
+                System.out.println("6. Exit");
+                System.out.print("Enter your choice: ");
+                int choice = scanner.nextInt();
+
+                switch (choice) {
+                    case 1:
+                        graph.displayAllVertices();
+                        break;
+                    case 2:
+                        findPathsMenu(graph, scanner);
+                        break;
+                    case 3:
+                        addVertexToFile(file, graph, scanner);
+                        break;
+                    case 4:
+                        removePathFromFile(file, graph, scanner);
+                        break;
+                    case 5:
+                        graph.displayAllConnections();
+                        break;
+                    case 6:
+                        System.out.println("Exiting. Goodbye!");
+                        return;
+                    default:
+                        System.out.println("Invalid choice. Try again.");
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error reading file: " + e.getMessage());
+        }
+    }
+
+    static Graph initializeGraphFromFile(File file) throws IOException {
+        Scanner fileScanner = new Scanner(file);
+        List<String> vertices = Arrays.asList(fileScanner.nextLine().split(","));
+        Graph graph = new Graph(vertices);
+
+        while (fileScanner.hasNextLine()) {
+            String[] edgeData = fileScanner.nextLine().split(",");
+            String src = edgeData[0].trim();
+            String dest = edgeData[1].trim();
+            int weight = Integer.parseInt(edgeData[2].trim());
+            graph.addEdge(src, dest, weight);
+        }
+        fileScanner.close();
+        return graph;
+    }
+
+    static void findPathsMenu(Graph graph, Scanner scanner) {
+    System.out.print("Enter the start vertex: ");
+    String start = scanner.next();
+    System.out.print("Enter the end vertex: ");
+    String end = scanner.next();
+
+    // Validate that the vertices exist
+    if (!graph.vertexMap.containsKey(start)) {
+        System.out.println("Error: Start vertex '" + start + "' does not exist.");
+        return;
+    }
+    if (!graph.vertexMap.containsKey(end)) {
+        System.out.println("Error: End vertex '" + end + "' does not exist.");
+        return;
+    }
+
+    // Find all possible paths
+    List<List<String>> allPaths = new ArrayList<>();
+    graph.findAllPaths(start, end, new ArrayList<>(), allPaths, new boolean[graph.vertices]);
+
+    System.out.println("\n======================= All Possible Paths =======================");
+    if (allPaths.isEmpty()) {
+        System.out.println("No paths found.");
+    } else {
+        for (int i = 0; i < allPaths.size(); i++) {
+            List<String> path = allPaths.get(i);
+            int totalWeight = calculatePathWeight(path, graph);
+            System.out.println((i + 1) + ". " + String.join(" -> ", path) + " = Total Weight: " + totalWeight);
+        }
+    }
+
+    // Find the shortest path
+    List<String> shortestPath = new ArrayList<>();
+    List<Integer> weights = new ArrayList<>();
+    int shortestPathWeight = graph.findShortestPath(start, end, shortestPath, weights);
+
+    System.out.println("\n==================== Shortest Path ====================");
+    if (shortestPathWeight == -1) {
+        System.out.println("No path exists.");
+    } else {
+        System.out.print("Shortest Path: ");
+        for (int i = 0; i < shortestPath.size() - 1; i++) {
+            System.out.print(shortestPath.get(i) + "(" + weights.get(i) + ") -> ");
+        }
+        System.out.println(shortestPath.get(shortestPath.size() - 1) + " = Total Weight: " + shortestPathWeight);
+    }
+}
+
+    static int calculatePathWeight(List<String> path, Graph graph) {
+    int totalWeight = 0;
+    for (int i = 0; i < path.size() - 1; i++) {
+        String src = path.get(i);
+        String dest = path.get(i + 1);
+        for (int[] neighbor : graph.adjList.get(src)) {
+            if (graph.indexMap.get(neighbor[0]).equals(dest)) {
+                totalWeight += neighbor[1];
+                break;
+            }
+        }
+    }
+    return totalWeight;
+}
+    static void addVertexToFile(File file, Graph graph, Scanner scanner) {
+    System.out.print("Enter the source vertex: ");
+    String src = scanner.next();
+    System.out.print("Enter the destination vertex: ");
+    String dest = scanner.next();
+    System.out.print("Enter the weight of the edge: ");
+    int weight = scanner.nextInt();
+
+    try {
+        // Read the current content of the file
+        List<String> lines = Files.readAllLines(file.toPath());
+        
+        // Extract the vertex list from the first line
+        Set<String> vertices = new LinkedHashSet<>(Arrays.asList(lines.get(0).split(",")));
+
+        // Add the new vertices if they don't exist
+        boolean vertexAdded = false;
+        if (!vertices.contains(src)) {
+            vertices.add(src);
+            vertexAdded = true;
+        }
+        if (!vertices.contains(dest)) {
+            vertices.add(dest);
+            vertexAdded = true;
+        }
+
+        // Update the first line with the new vertex list
+        if (vertexAdded) {
+            lines.set(0, String.join(",", vertices));
+        }
+
+        // Append the new edge to the file content
+        lines.add(src + "," + dest + "," + weight);
+
+        // Rewrite the file with the updated content
+        Files.write(file.toPath(), lines);
+
+        System.out.println("Vertex and edge added successfully.");
+
+        // Reload the graph
+        Graph updatedGraph = initializeGraphFromFile(file);
+        graph.adjList = updatedGraph.adjList;
+        graph.vertexMap = updatedGraph.vertexMap;
+        graph.indexMap = updatedGraph.indexMap;
+        graph.vertices = updatedGraph.vertices;
+
+    } catch (IOException e) {
+        System.err.println("Error updating file: " + e.getMessage());
+    }
+}
+
+    static void removePathFromFile(File file, Graph graph, Scanner scanner) {
+    try {
+        List<String> lines = Files.readAllLines(file.toPath());
+
+        System.out.println("\n===== All Connections =====");
+        
+        for (int i = 1; i < lines.size(); i++) {
+            System.out.println((i) + ". " + lines.get(i));
+        }
+        System.out.println("0.Menu");
+
+        System.out.print("Enter the number of the path you want to delete: ");
+        int choice = scanner.nextInt();
+
+        if (choice >= 1 && choice < lines.size()) {
+            lines.remove(choice);
+            Files.write(file.toPath(), lines);
+            System.out.println("Path deleted successfully.");
+        } else {
+            if(choice == 0){
+                
+            }else{
+                System.out.println("Invalid choice.");
+            }
+            
+        }
+
+        // Reload graph from the updated file
+        Graph updatedGraph = initializeGraphFromFile(file);
+        graph.adjList = updatedGraph.adjList;
+        graph.vertexMap = updatedGraph.vertexMap;
+        graph.indexMap = updatedGraph.indexMap;
+        graph.vertices = updatedGraph.vertices;
+
+    } catch (IOException e) {
+        System.err.println("Error modifying file: " + e.getMessage());
+    }
+}
+
+}
+
